@@ -19,44 +19,11 @@ st.set_page_config(
 import base64
 from pathlib import Path
 
-def cargar_logo(ruta="assets/ssr.png"):
-    """
-    Carga el logo desde el backend y lo convierte a base64
-    para embebido directo en HTML — no depende de uploads.
-    """
-    logo_path = Path(ruta)
-    if logo_path.exists():
-        with open(logo_path, "rb") as f:
-            data = base64.b64encode(f.read()).decode()
-        ext = logo_path.suffix.replace('.', '')
-        return f"data:image/{ext};base64,{data}"
-    return None
 
-# ── Header con logo ───────────────────────────────────────────────────────
-col_titulo, col_logo = st.columns([6, 1])
 
 # with col_titulo:
 #     st.markdown("## Modelo Metalúrgico")
 
-with col_logo:
-    logo_b64 = cargar_logo("assets/ssr.png")
-    if logo_b64:
-        st.markdown(
-            f"""<div style='text-align:right; padding-top:6px;'>
-                <img src="{logo_b64}"
-                     style="max-height:70px; max-width:120px;
-                            object-fit:contain; border-radius:4px;">
-                </div>""",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            """<div style='border:1px dashed #30363d; border-radius:6px;
-               padding:10px; text-align:center;
-               color:#8b949e; font-size:12px;'>
-               Sin logo</div>""",
-            unsafe_allow_html=True
-        )
 
 # ── ESTILOS ───────────────────────────────────────────────────────────────
 st.markdown("""
