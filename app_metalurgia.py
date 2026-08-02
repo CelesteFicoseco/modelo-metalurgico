@@ -1038,21 +1038,7 @@ with tab1:
         "estadisticas.csv",
         "text/csv"
     )
-    st.markdown("---")
-    if st.button("📄 Generar reporte HTML", key="reporte_tab1"):
-        html = generar_reporte_html(
-            df_filtrado,
-            st.session_state.get('modelo_resultado'),
-            cols_seleccionadas,          # ← agregás esto
-            titulo="Reporte Metalúrgico — Exploración"
-        )
-        st.download_button(
-            "⬇ Descargar reporte",
-            html,
-            file_name=f"reporte_met_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.html",
-            mime="text/html",
-            key="dl_tab1"
-        )
+   
 
 # ═════════════════════════════════════════════════════════════════════════
 # TAB 2 — AJUSTE AUTOMÁTICO
@@ -1062,158 +1048,56 @@ with tab2:
     st.markdown("### Configuración del modelo")
 
     # ── Switch ecuación de laboratorio ───────────────────────────────────
-    usar_ec_lab = st.toggle(
-        "⚗ Usar ecuación de laboratorio (lgo/mchch)",
-        value=False,
-        key="switch_lab_tab2",
-        help="Activa la ecuación especial calculada con ensayos de laboratorio"
-    )
+    
+    # ── Selectores modo normal ────────────────────────────────────────
+    col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
 
-    if usar_ec_lab:
-        st.markdown("#### Configuración — Ecuación de laboratorio")
-
-        cols_lgo_candidatas = [
-            c for c in cols_numericas
-            if any(k in c.lower()
-                   for k in ['lgo', 'pct_lgo', '%lgo', 'porc_lgo'])
-        ]
-
-        col_l1, col_l2, col_l3 = st.columns(3)
-
-        with col_l1:
-            col_lgo = st.selectbox(
-                "Columna % lgo en los datos",
-                options=cols_numericas,
-                index=cols_numericas.index(cols_lgo_candidatas[0])
-                      if cols_lgo_candidatas else 0,
-                key="col_lgo_tab2",
-                help="Columna del CSV que contiene el % de material lgo"
-            )
-
-        with col_l2:
-            y_col_lab = st.selectbox(
-                "Variable Y (salida)",
-                cols_numericas,
-                key="auto_y_lab"
-            )
-
-        with col_l3:
-            st.metric(
-                "Rango % lgo en datos",
-                f"{df_filtrado[col_lgo].min():.1f}% → "
-                f"{df_filtrado[col_lgo].max():.1f}%"
-            )
-
-        coefs_default = ECUACIONES_LAB.get(y_col_lab, {
-            "k": 0.0, "c1": 0.0, "c2": 0.0, "c3": 0.0
-        })
-
-        st.markdown(
-            "**Coeficientes de la ecuación**  "
-            "`y = k + c₁·x + c₂·x² + c₃·x³`"
+    with col_cfg1:
+        y_col = st.selectbox(
+            "Variable Y (salida)",
+            cols_numericas,
+            index=0,
+            key="auto_y"
         )
-        st.caption(
-            "Precargados con los valores de laboratorio — "
-            "podés modificarlos si querés probar variaciones"
+
+    with col_cfg2:
+        modo = st.radio(
+            "Modo de entrada",
+            ["Una variable X", "Múltiples variables X"],
+            key="auto_modo",
+            horizontal=True
         )
-        # ── Forzar carga de coeficientes cuando cambia la variable Y ──────────────
-        _clave_carga = f"_lab_cargado_{y_col_lab}"
-        if _clave_carga not in st.session_state:
-            # Limpiar claves anteriores de otras variables
-            for key in ["lab_k_tab2", "lab_c1_tab2", "lab_c2_tab2", "lab_c3_tab2"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            # Cargar coeficientes del laboratorio
-            st.session_state["lab_k_tab2"]  = coefs_default["k"]
-            st.session_state["lab_c1_tab2"] = coefs_default["c1"]
-            st.session_state["lab_c2_tab2"] = coefs_default["c2"]
-            st.session_state["lab_c3_tab2"] = coefs_default["c3"]
-            st.session_state[_clave_carga]  = True
 
-        col_c0, col_c1, col_c2, col_c3 = st.columns(4)
-        with col_c0:
-            lab_k  = st.number_input(
-                "k (término independiente)",
-                value=coefs_default["k"],
-                format="%.6f", key="lab_k_tab2"
-            )
-        with col_c1:
-            lab_c1 = st.number_input(
-                "c₁ (·x)",
-                value=coefs_default["c1"],
-                format="%.6f", key="lab_c1_tab2"
-            )
-        with col_c2:
-            lab_c2 = st.number_input(
-                "c₂ (·x²)",
-                value=coefs_default["c2"],
-                format="%.6f", key="lab_c2_tab2"
-            )
-        with col_c3:
-            lab_c3 = st.number_input(
-                "c₃ (·x³)",
-                value=coefs_default["c3"],
-                format="%.6f", key="lab_c3_tab2"
-            )
-
-        eq_lab_str = (
-            f"{y_col_lab} = {lab_k:+.4f} "
-            f"{lab_c1:+.6f}·{col_lgo} "
-            f"{lab_c2:+.6f}·{col_lgo}² "
-            f"{lab_c3:+.6f}·{col_lgo}³"
+    with col_cfg3:
+        grado = st.select_slider(
+            "Grado del polinomio",
+            options=[1, 2, 3, 4],
+            value=2,
+            key="auto_grado",
+            help="1=lineal, 2=cuadrático, 3=cúbico, 4=cuártico"
         )
-        st.code(eq_lab_str, language=None)
 
+    opciones_x = [c for c in cols_numericas if c != y_col]
+
+    if modo == "Una variable X":
+        x_cols = [st.selectbox(
+            "Variable X (entrada)",
+            opciones_x,
+            key="auto_x_single"
+        )]
     else:
-        # ── Selectores modo normal ────────────────────────────────────────
-        col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
-
-        with col_cfg1:
-            y_col = st.selectbox(
-                "Variable Y (salida)",
-                cols_numericas,
-                index=0,
-                key="auto_y"
+        x_cols = st.multiselect(
+            "Variables X (entradas)",
+            opciones_x,
+            default=opciones_x[:2] if len(opciones_x) >= 2
+                    else opciones_x,
+            key="auto_x_multi"
+        )
+        if x_cols:
+            st.caption(
+                "ℹ️ Con múltiples variables el polinomio "
+                "se aplica a cada una por separado"
             )
-
-        with col_cfg2:
-            modo = st.radio(
-                "Modo de entrada",
-                ["Una variable X", "Múltiples variables X"],
-                key="auto_modo",
-                horizontal=True
-            )
-
-        with col_cfg3:
-            grado = st.select_slider(
-                "Grado del polinomio",
-                options=[1, 2, 3, 4],
-                value=2,
-                key="auto_grado",
-                help="1=lineal, 2=cuadrático, 3=cúbico, 4=cuártico"
-            )
-
-        opciones_x = [c for c in cols_numericas if c != y_col]
-
-        if modo == "Una variable X":
-            x_cols = [st.selectbox(
-                "Variable X (entrada)",
-                opciones_x,
-                key="auto_x_single"
-            )]
-        else:
-            x_cols = st.multiselect(
-                "Variables X (entradas)",
-                opciones_x,
-                default=opciones_x[:2] if len(opciones_x) >= 2
-                        else opciones_x,
-                key="auto_x_multi"
-            )
-            if x_cols:
-                st.caption(
-                    "ℹ️ Con múltiples variables el polinomio "
-                    "se aplica a cada una por separado"
-                )
 
     st.markdown("---")
 
@@ -1226,84 +1110,46 @@ with tab2:
 
         if ajustar:
 
-            if usar_ec_lab:
-                # ── Modo laboratorio ──────────────────────────────────────
-                df_lab = df_filtrado[
-                    [col_lgo, y_col_lab]
-                ].dropna().reset_index(drop=True)
+            # ── Modo normal ───────────────────────────────────────────
+            if not x_cols:
+                st.error("Seleccioná al menos una variable X")
+                st.stop()
 
-                if len(df_lab) < 5:
-                    st.error(f"Muy pocos datos ({len(df_lab)} registros).")
-                    st.stop()
+            df_base   = df_train_global if usar_corte else df_filtrado
+            df_modelo = df_base[
+                x_cols + [y_col]
+            ].dropna().reset_index(drop=True)
 
-                x_lab      = df_lab[col_lgo].values
-                y_lab      = df_lab[y_col_lab].values
-                y_pred_lab = np.array([
-                    predict_lab(x, lab_k, lab_c1, lab_c2, lab_c3)
-                    for x in x_lab
-                ])
-                r2_lab    = r2_score(y_lab, y_pred_lab)
-                resid_lab = y_lab - y_pred_lab
+            if len(df_modelo) < 10:
+                st.error(
+                    f"Muy pocos datos de entrenamiento "
+                    f"({len(df_modelo)} registros). "
+                    f"{'Revisá la fecha de corte.'if usar_corte else 'Ampliá el rango de fechas.'}"
+                )
+                st.stop()
 
-                st.session_state['modelo_resultado'] = {
-                    'modo_lab' : True,
-                    'col_lgo'  : col_lgo,
-                    'lab_k'    : lab_k,
-                    'lab_c1'   : lab_c1,
-                    'lab_c2'   : lab_c2,
-                    'lab_c3'   : lab_c3,
-                    'df_modelo': df_lab,
-                    'x_cols'   : [col_lgo],
-                    'y_col'    : y_col_lab,
-                    'grado'    : 3,
-                    'r2'       : r2_lab,
-                    'y_pred'   : y_pred_lab,
-                    'residuos' : resid_lab,
-                    'model'    : None,
-                    'poly'     : None,
-                }
+            X_raw  = df_modelo[x_cols].values
+            y      = df_modelo[y_col].values
+            poly   = PolynomialFeatures(degree=grado, include_bias=False)
+            X_poly = poly.fit_transform(X_raw)
+            model  = LinearRegression().fit(X_poly, y)
+            y_pred = model.predict(X_poly)
+            r2     = r2_score(y, y_pred)
+            residuos = y - y_pred
 
-            else:
-                # ── Modo normal ───────────────────────────────────────────
-                if not x_cols:
-                    st.error("Seleccioná al menos una variable X")
-                    st.stop()
-
-                df_base   = df_train_global if usar_corte else df_filtrado
-                df_modelo = df_base[
-                    x_cols + [y_col]
-                ].dropna().reset_index(drop=True)
-
-                if len(df_modelo) < 10:
-                    st.error(
-                        f"Muy pocos datos de entrenamiento "
-                        f"({len(df_modelo)} registros). "
-                        f"{'Revisá la fecha de corte.'if usar_corte else 'Ampliá el rango de fechas.'}"
-                    )
-                    st.stop()
-
-                X_raw  = df_modelo[x_cols].values
-                y      = df_modelo[y_col].values
-                poly   = PolynomialFeatures(degree=grado, include_bias=False)
-                X_poly = poly.fit_transform(X_raw)
-                model  = LinearRegression().fit(X_poly, y)
-                y_pred = model.predict(X_poly)
-                r2     = r2_score(y, y_pred)
-                residuos = y - y_pred
-
-                st.session_state['modelo_resultado'] = {
-                    'modo_lab' : False,
-                    'model'    : model,
-                    'poly'     : poly,
-                    'df_modelo': df_modelo,
-                    'x_cols'   : x_cols,
-                    'y_col'    : y_col,
-                    'grado'    : grado,
-                    'r2'       : r2,
-                    'y_pred'   : y_pred,
-                    'residuos' : residuos,
-                    'modo'     : modo
-                }
+            st.session_state['modelo_resultado'] = {
+                'modo_lab' : False,
+                'model'    : model,
+                'poly'     : poly,
+                'df_modelo': df_modelo,
+                'x_cols'   : x_cols,
+                'y_col'    : y_col,
+                'grado'    : grado,
+                'r2'       : r2,
+                'y_pred'   : y_pred,
+                'residuos' : residuos,
+                'modo'     : modo
+            }
 
         # ── Recuperar resultados ──────────────────────────────────────────
         res      = st.session_state['modelo_resultado']
