@@ -583,11 +583,12 @@ if not cols_seleccionadas:
 # ── df_filtrado disponible para todos los tabs ────────────────────────────
 df_filtrado = df.copy()
 
-# Limpiar modelo si cambiaron los datos
+# Limpiar modelo solo si cambia el rango de fechas
+clave_rango = f"{desde}_{hasta}"
 if 'modelo_resultado' in st.session_state:
-    modelo_guardado = st.session_state['modelo_resultado']
-    if len(df_filtrado) != len(modelo_guardado.get('df_modelo', [])):
+    if st.session_state.get('_ultimo_rango') != clave_rango:
         del st.session_state['modelo_resultado']
+st.session_state['_ultimo_rango'] = clave_rango
 
 tab1, tab2, tab3 = st.tabs([
     "> Exploración de datos",
