@@ -7,7 +7,7 @@ from plotly.subplots import make_subplots
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.metrics import r2_score
- 
+
 # ── CONFIGURACIÓN ─────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="SSR Puna - Modelo Metalúrgico",
@@ -15,10 +15,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
- 
+
 import base64
 from pathlib import Path
- 
+
 # ── ESTILOS ───────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
@@ -46,8 +46,8 @@ st.markdown("""
   [data-testid="stSidebar"] label { font-size: 16px !important; }
 </style>
 """, unsafe_allow_html=True)
- 
- 
+
+
 def layout_claro(height=450, titulo=None):
     base = dict(
         paper_bgcolor='#ffffff',
@@ -62,11 +62,11 @@ def layout_claro(height=450, titulo=None):
     if titulo:
         base['title'] = dict(text=titulo, font=dict(size=16, color='#1a1a2e'))
     return base
- 
- 
+
+
 FONDO_CLARO = True
- 
- 
+
+
 # ── FUNCIONES DE DATOS ────────────────────────────────────────────────────
 @st.cache_data
 def cargar_datos(archivo):
@@ -84,12 +84,12 @@ def cargar_datos(archivo):
         return df, None
     except Exception as e:
         return None, str(e)
- 
- 
+
+
 def get_columnas_numericas(df):
     return [c for c in df.select_dtypes(include='number').columns]
- 
- 
+
+
 def calcular_stats(df, columnas):
     stats = []
     for col in columnas:
@@ -105,18 +105,18 @@ def calcular_stats(df, columnas):
             'Nulos'          : df[col].isna().sum()
         })
     return pd.DataFrame(stats)
- 
- 
+
+
 def calcular_correlaciones(df, columnas):
     return df[columnas].corr().round(4)
- 
- 
+
+
 def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
     import io
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
- 
+
     model    = resultado['model']
     poly     = resultado['poly']
     x_cols_r = resultado['x_cols']
@@ -128,13 +128,13 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
     coefs     = model.coef_
     intercept = model.intercept_
     nombres   = poly.get_feature_names_out(x_cols_r)
- 
+
     def limpiar_nombre(nombre, x_cols):
         res_n = nombre
         for i, col in enumerate(x_cols):
             res_n = res_n.replace(f"x{i}", col)
         return res_n
- 
+
     wb = Workbook()
     COLOR_HEADER  = "1a3a5c"
     COLOR_SUBHEAD = "2d6a9f"
@@ -143,43 +143,43 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
     COLOR_WHITE   = "ffffff"
     COLOR_GREEN   = "3fb950"
     COLOR_RED     = "e63946"
- 
+
     def header_style(cell, bg=COLOR_HEADER, size=12, bold=True, color="ffffff"):
         cell.font      = Font(bold=bold, size=size, color=color, name='Calibri')
         cell.fill      = PatternFill("solid", fgColor=bg)
         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
- 
+
     def border_thin(cell):
         thin = Side(style='thin', color='cccccc')
         cell.border = Border(left=thin, right=thin, top=thin, bottom=thin)
- 
+
     def data_style(cell, bold=False, bg=COLOR_WHITE, align='left'):
         cell.font      = Font(bold=bold, size=11, name='Calibri')
         cell.fill      = PatternFill("solid", fgColor=bg)
         cell.alignment = Alignment(horizontal=align, vertical='center')
         border_thin(cell)
- 
+
     ws1 = wb.active
     ws1.title = "Modelo"
     ws1.column_dimensions['A'].width = 35
     ws1.column_dimensions['B'].width = 45
     ws1.row_dimensions[1].height = 35
- 
+
     ws1.merge_cells('A1:B1')
     cell = ws1['A1']
     cell.value = "MODELO METALÚRGICO — COEFICIENTES DE AJUSTE"
     header_style(cell, bg=COLOR_HEADER, size=14)
- 
+
     ws1.merge_cells('A2:B2')
     cell = ws1['A2']
     cell.value = f"Generado: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}"
     header_style(cell, bg=COLOR_SUBHEAD, size=10, bold=False)
- 
+
     ws1.merge_cells('A4:B4')
     cell = ws1['A4']
     cell.value = "CONTEXTO DEL AJUSTE"
     header_style(cell, bg=COLOR_SUBHEAD, size=11)
- 
+
     contexto = [
         ("Variable salida (Y)",   y_col_r),
         ("Variables entrada (X)", ", ".join(x_cols_r)),
@@ -194,13 +194,13 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
         c_valor = ws1.cell(row=i, column=2, value=valor)
         data_style(c_label, bold=True, bg=COLOR_LIGHT if i % 2 == 0 else COLOR_WHITE)
         data_style(c_valor, bg=COLOR_LIGHT if i % 2 == 0 else COLOR_WHITE, align='right')
- 
+
     fila_met = len(contexto) + 6
     ws1.merge_cells(f'A{fila_met}:B{fila_met}')
     cell = ws1[f'A{fila_met}']
     cell.value = "MÉTRICAS DEL MODELO"
     header_style(cell, bg=COLOR_SUBHEAD, size=11)
- 
+
     metricas = [
         ("R² (coeficiente de determinación)", round(r2, 6)),
         ("Error estándar de residuos",         round(float(residuos.std()), 4)),
@@ -217,24 +217,24 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
         if label.startswith("R²"):
             color_r2 = COLOR_GREEN if r2 >= 0.7 else COLOR_ACCENT if r2 >= 0.4 else COLOR_RED
             c_valor.font = Font(bold=True, size=12, color=color_r2, name='Calibri')
- 
+
     fila_coef = fila_met + len(metricas) + 2
     ws1.merge_cells(f'A{fila_coef}:B{fila_coef}')
     cell = ws1[f'A{fila_coef}']
     cell.value = "COEFICIENTES"
     header_style(cell, bg=COLOR_SUBHEAD, size=11)
- 
+
     fila_coef += 1
     for col_idx, texto in enumerate(['Término', 'Coeficiente'], start=1):
         c = ws1.cell(row=fila_coef, column=col_idx, value=texto)
         header_style(c, bg=COLOR_ACCENT, size=11, color=COLOR_WHITE)
- 
+
     fila_coef += 1
     c1 = ws1.cell(row=fila_coef, column=1, value='Término independiente (k)')
     c2 = ws1.cell(row=fila_coef, column=2, value=round(float(intercept), 6))
     data_style(c1, bold=True, bg=COLOR_LIGHT)
     data_style(c2, align='right', bg=COLOR_LIGHT)
- 
+
     for i, (nombre, coef) in enumerate(zip(nombres, coefs)):
         fila_coef += 1
         nombre_limpio = limpiar_nombre(nombre, x_cols_r)
@@ -243,13 +243,13 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
         c2 = ws1.cell(row=fila_coef, column=2, value=round(float(coef), 6))
         data_style(c1, bg=bg)
         data_style(c2, align='right', bg=bg)
- 
+
     fila_eq = fila_coef + 2
     ws1.merge_cells(f'A{fila_eq}:B{fila_eq}')
     cell = ws1[f'A{fila_eq}']
     cell.value = "ECUACIÓN"
     header_style(cell, bg=COLOR_SUBHEAD, size=11)
- 
+
     partes = []
     for nombre, coef in zip(nombres, coefs):
         nombre_limpio = limpiar_nombre(nombre, x_cols_r)
@@ -257,7 +257,7 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
         partes.append(f"{signo} {abs(coef):.6f}·{nombre_limpio}")
     signo_k = "+" if intercept >= 0 else "−"
     eq_str = f"{y_col_r} = {signo_k} {abs(intercept):.4f} " + " ".join(partes)
- 
+
     fila_eq += 1
     ws1.merge_cells(f'A{fila_eq}:B{fila_eq}')
     ws1.row_dimensions[fila_eq].height = 30
@@ -267,7 +267,7 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
     cell.fill      = PatternFill("solid", fgColor=COLOR_LIGHT)
     cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
     border_thin(cell)
- 
+
     ws2 = wb.create_sheet("Datos")
     cols_datos = x_cols_r + [y_col_r]
     for col_idx, col_name in enumerate(cols_datos, start=1):
@@ -279,7 +279,7 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
             c = ws2.cell(row=row_idx, column=col_idx, value=round(float(val), 4))
             bg = COLOR_LIGHT if row_idx % 2 == 0 else COLOR_WHITE
             data_style(c, bg=bg, align='right')
- 
+
     ws3 = wb.create_sheet("Residuos")
     for col_idx, titulo in enumerate(
         [y_col_r + ' real', y_col_r + ' predicho', 'Residuo'], start=1
@@ -287,7 +287,7 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
         c = ws3.cell(row=1, column=col_idx, value=titulo)
         header_style(c, bg=COLOR_HEADER, size=11)
         ws3.column_dimensions[get_column_letter(col_idx)].width = 22
- 
+
     y_real = df_mod[y_col_r].values
     y_pred = resultado['y_pred']
     for row_idx, (yr, yp, res) in enumerate(zip(y_real, y_pred, residuos), start=2):
@@ -300,16 +300,16 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
         data_style(c3, bg=bg, align='right')
         if abs(res) > 2 * residuos.std():
             c3.font = Font(bold=True, size=11, color=COLOR_RED, name='Calibri')
- 
+
     buffer = __import__('io').BytesIO()
     wb.save(buffer)
     buffer.seek(0)
     return buffer
- 
- 
+
+
 def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Reporte Metalúrgico"):
     import plotly.offline as pyo
- 
+
     def fig_a_div(fig, div_id):
         """Genera un div HTML autocontenido para la figura."""
         return pyo.plot(
@@ -317,15 +317,16 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
             output_type='div',
             include_plotlyjs=False,
             div_id=div_id,
-            config={'responsive': True, 'displayModeBar': False}
+            config={'responsive': True, 'displayModeBar': False},
+            auto_open=False
         )
- 
+
     tiene_modelo  = resultado_modelo is not None
     fecha_reporte = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
     cols_num      = [c for c in cols_reporte if c in df_data.columns]
     stats         = calcular_stats(df_data, cols_num)
     corr_df       = calcular_correlaciones(df_data, cols_num) if len(cols_num) >= 2 else None
- 
+
     # ── Serie temporal ────────────────────────────────────────────────────
     cols_plot = cols_num[:3]
     fig_serie = make_subplots(rows=len(cols_plot), cols=1, shared_xaxes=True,
@@ -346,7 +347,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     fig_serie.update_xaxes(gridcolor='#21262d')
     fig_serie.update_yaxes(gridcolor='#21262d')
     div_serie = fig_a_div(fig_serie, 'chart-serie')
- 
+
     # ── Correlaciones ─────────────────────────────────────────────────────
     div_corr = ''
     html_section_corr = ''
@@ -372,7 +373,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     <div class="chart-title">Matriz de correlación</div>
     {div_corr}
   </div>'''
- 
+
     # ── Modelo ────────────────────────────────────────────────────────────
     eq_str       = ""
     r2_str       = ""
@@ -381,7 +382,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     nombres      = []
     x_cols_r     = []
     html_section_modelo = ''
- 
+
     if tiene_modelo:
         model    = resultado_modelo['model']
         poly     = resultado_modelo['poly']
@@ -394,20 +395,20 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
         coefs     = model.coef_
         intercept = model.intercept_
         nombres   = poly.get_feature_names_out(x_cols_r)
- 
+
         partes = [f"{intercept:.4f}"]
         for nombre, coef in zip(nombres, coefs):
             signo = "+" if coef >= 0 else "-"
             partes.append(f"{signo} {abs(coef):.6f}·{nombre}")
         eq_str = f"{y_col_r} = " + " ".join(partes)
- 
+
         if len(x_cols_r) == 1:
             x_vals  = df_mod[x_cols_r[0]].values.tolist()
             y_vals  = df_mod[y_col_r].values.tolist()
             x_curve = np.linspace(min(x_vals), max(x_vals), 300).reshape(-1, 1)
             y_curve = model.predict(poly.transform(x_curve)).tolist()
             x_curve_list = x_curve.flatten().tolist()
- 
+
             fig_mod = go.Figure()
             fig_mod.add_trace(go.Scatter(
                 x=x_vals, y=y_vals, mode='markers', name='Datos',
@@ -423,7 +424,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
             y_vals_real = df_mod[y_col_r].values.tolist()
             y_pred_r    = resultado_modelo['y_pred'].tolist()
             lim = [float(min(y_vals_real)), float(max(y_vals_real))]
- 
+
             fig_mod = go.Figure()
             fig_mod.add_trace(go.Scatter(
                 x=y_vals_real, y=y_pred_r, mode='markers', name='Datos',
@@ -433,7 +434,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
                 x=lim, y=lim, mode='lines', name='Ideal',
                 line=dict(color='#e63946', width=1.5, dash='dash')
             ))
- 
+
         fig_mod.update_layout(
             xaxis_title=x_cols_r[0] if len(x_cols_r) == 1 else f'{y_col_r} real',
             yaxis_title=y_col_r if len(x_cols_r) == 1 else f'{y_col_r} predicho',
@@ -443,13 +444,13 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
             height=450, template=None
         )
         div_modelo = fig_a_div(fig_mod, 'chart-modelo')
- 
+
         coef_df = pd.DataFrame({
             'Término'    : ['Término independiente'] + list(nombres),
             'Coeficiente': [round(intercept, 6)] + [round(c, 6) for c in coefs]
         })
         coef_html = coef_df.to_html(index=False, border=0, classes='stats-table')
- 
+
         html_section_modelo = f'''
   <div class="section-title">Modelo ajustado</div>
   <div class="eq-box">
@@ -464,9 +465,9 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     <div class="chart-title">Coeficientes</div>
     <div style="padding:8px 0">{coef_html}</div>
   </div>'''
- 
+
     stats_html = stats.to_html(index=False, border=0, classes='stats-table')
- 
+
     html = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -537,47 +538,47 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
 </body>
 </html>"""
     return html
- 
- 
+
+
 # ── SIDEBAR ───────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## Modelo Metalúrgico")
     st.markdown("---")
- 
+
     st.markdown("### Carga de Datos")
     archivo = st.file_uploader(
         "Subir Excel o CSV", type=['xlsx', 'xls', 'csv'],
         help="Una fila por día, con columna de fecha"
     )
- 
+
     if archivo:
         df_raw, error = cargar_datos(archivo)
         if error:
             st.error(f"Error al cargar: {error}")
             st.stop()
- 
+
         st.success(f"✓ {len(df_raw)} registros cargados")
- 
+
         st.markdown("### Rango de fechas")
         fecha_min = df_raw['fecha'].min().date()
         fecha_max = df_raw['fecha'].max().date()
- 
+
         col1, col2 = st.columns(2)
         with col1:
             desde = st.date_input("Desde", fecha_min, min_value=fecha_min, max_value=fecha_max)
         with col2:
             hasta = st.date_input("Hasta", fecha_max, min_value=fecha_min, max_value=fecha_max)
- 
+
         mask = (df_raw['fecha'].dt.date >= desde) & (df_raw['fecha'].dt.date <= hasta)
         df   = df_raw[mask].reset_index(drop=True)
         st.caption(f"{len(df)} registros en el rango seleccionado")
- 
+
         st.markdown("### ✂️ Corte train / nuevo")
         usar_corte = st.toggle(
             "Activar corte de período", value=False,
             help="Divide los datos en históricos (train) y nuevos para comparar contra el modelo"
         )
- 
+
         fecha_corte = None
         if usar_corte:
             fecha_corte = st.date_input(
@@ -592,7 +593,7 @@ with st.sidebar:
         else:
             df_train_global = df.copy()
             df_new_global   = pd.DataFrame(columns=df.columns)
- 
+
         st.markdown("### Variables a explorar")
         cols_numericas = get_columnas_numericas(df)
         cols_seleccionadas = st.multiselect(
@@ -602,28 +603,28 @@ with st.sidebar:
     else:
         st.info("Subí un archivo para comenzar")
         st.stop()
- 
+
 # ── TABS PRINCIPALES ──────────────────────────────────────────────────────
 if not cols_seleccionadas:
     st.warning("Seleccioná al menos una variable en el sidebar")
     st.stop()
- 
+
 # ── df_filtrado disponible para todos los tabs ────────────────────────────
 df_filtrado = df.copy()
- 
+
 # Limpiar modelo solo si cambia el rango de fechas
 clave_rango = f"{desde}_{hasta}"
 if 'modelo_resultado' in st.session_state:
     if st.session_state.get('_ultimo_rango') != clave_rango:
         del st.session_state['modelo_resultado']
 st.session_state['_ultimo_rango'] = clave_rango
- 
+
 tab1, tab2, tab3 = st.tabs([
     "> Exploración de datos",
     "> Ajuste automático",
     "> Modelo manual"
 ])
- 
+
 # ── ECUACIONES DE LABORATORIO ─────────────────────────────────────────────
 ECUACIONES_LAB = {
     "Ag Recovery": {
@@ -637,20 +638,20 @@ ECUACIONES_LAB = {
         "k" : 0.0, "c1": 0.0, "c2": 0.0, "c3": 0.0, "x_col": ""
     },
 }
- 
- 
+
+
 def predict_lab(x, k, c1, c2, c3):
     x_prop = x / 100.0
     return k + c1*x_prop + c2*x_prop**2 + c3*x_prop**3
- 
- 
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # TAB 1 — EXPLORACIÓN DE DATOS
 # ═════════════════════════════════════════════════════════════════════════
 with tab1:
- 
+
     st.markdown("### Tabla de datos")
- 
+
     with st.expander("Filtros adicionales por columna"):
         for col in cols_seleccionadas:
             v_min = float(df[col].min())
@@ -664,23 +665,23 @@ with tab1:
                     (df_filtrado[col] >= rango[0]) &
                     (df_filtrado[col] <= rango[1])
                 ]
- 
+
     st.caption(f"{len(df_filtrado)} registros después de filtros")
     st.dataframe(
         df_filtrado[['fecha'] + cols_seleccionadas],
         use_container_width=True, height=300
     )
- 
+
     csv = df_filtrado[['fecha'] + cols_seleccionadas].to_csv(index=False)
     st.download_button("⬇ Descargar tabla filtrada (CSV)", csv, "datos_filtrados.csv", "text/csv")
- 
+
     st.markdown("---")
     st.markdown("### Serie temporal")
     col_serie = st.multiselect(
         "Variables a graficar en el tiempo", cols_seleccionadas,
         default=cols_seleccionadas[:2], key="serie_cols"
     )
- 
+
     if col_serie:
         fig_serie = make_subplots(
             rows=len(col_serie), cols=1, shared_xaxes=True,
@@ -701,10 +702,10 @@ with tab1:
         fig_serie.update_xaxes(gridcolor='#e0e0e0')
         fig_serie.update_yaxes(gridcolor='#e0e0e0')
         st.plotly_chart(fig_serie, use_container_width=True, key="chart_tab1_serie")
- 
+
     st.markdown("---")
     st.markdown("### Correlaciones")
- 
+
     if len(cols_seleccionadas) >= 2:
         col_izq, col_der = st.columns(2)
         with col_izq:
@@ -721,7 +722,7 @@ with tab1:
             ))
             fig_heatmap.update_layout(**layout_claro(height=450))
             st.plotly_chart(fig_heatmap, use_container_width=True, key="chart_tab1_heatmap")
- 
+
         with col_der:
             st.markdown("**Tabla de correlaciones**")
             corr_df = corr_matrix.stack().reset_index()
@@ -734,42 +735,42 @@ with tab1:
                 else ('🔴 Débil' if x >= 0.2 else '⚪ Muy débil'))
             )
             st.dataframe(corr_df, use_container_width=True, height=320)
- 
+
     st.markdown("---")
     st.markdown("### Estadísticas descriptivas")
     stats_df = calcular_stats(df_filtrado, cols_seleccionadas)
     st.dataframe(stats_df, use_container_width=True)
- 
+
     csv_stats = stats_df.to_csv(index=False)
     st.download_button("⬇ Descargar estadísticas (CSV)", csv_stats, "estadisticas.csv", "text/csv")
- 
- 
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # TAB 2 — AJUSTE AUTOMÁTICO
 # ═════════════════════════════════════════════════════════════════════════
 with tab2:
- 
+
     st.markdown("### Configuración del modelo")
- 
+
     col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
- 
+
     with col_cfg1:
         y_col = st.selectbox("Variable Y (salida)", cols_numericas, index=0, key="auto_y")
- 
+
     with col_cfg2:
         modo = st.radio(
             "Modo de entrada", ["Una variable X", "Múltiples variables X"],
             key="auto_modo", horizontal=True
         )
- 
+
     with col_cfg3:
         grado = st.select_slider(
             "Grado del polinomio", options=[1, 2, 3, 4], value=2,
             key="auto_grado", help="1=lineal, 2=cuadrático, 3=cúbico, 4=cuártico"
         )
- 
+
     opciones_x = [c for c in cols_numericas if c != y_col]
- 
+
     if modo == "Una variable X":
         x_cols = [st.selectbox("Variable X (entrada)", opciones_x, key="auto_x_single")]
     else:
@@ -780,28 +781,28 @@ with tab2:
         )
         if x_cols:
             st.caption("ℹ️ Con múltiples variables el polinomio se aplica a cada una por separado")
- 
+
     st.markdown("---")
- 
+
     ajustar = st.button("⚙️ Ajustar modelo", type="primary", use_container_width=True)
- 
+
     if ajustar or 'modelo_resultado' in st.session_state:
- 
+
         if ajustar:
             if not x_cols:
                 st.error("Seleccioná al menos una variable X")
                 st.stop()
- 
+
             df_base   = df_train_global if usar_corte else df_filtrado
             df_modelo = df_base[x_cols + [y_col]].dropna().reset_index(drop=True)
- 
+
             if len(df_modelo) < 10:
                 st.error(
                     f"Muy pocos datos de entrenamiento ({len(df_modelo)} registros). "
                     f"{'Revisá la fecha de corte.' if usar_corte else 'Ampliá el rango de fechas.'}"
                 )
                 st.stop()
- 
+
             X_raw    = df_modelo[x_cols].values
             y        = df_modelo[y_col].values
             poly     = PolynomialFeatures(degree=grado, include_bias=False)
@@ -810,7 +811,7 @@ with tab2:
             y_pred   = model.predict(X_poly)
             r2       = r2_score(y, y_pred)
             residuos = y - y_pred
- 
+
             st.session_state['modelo_resultado'] = {
                 'modo_lab' : False,
                 'model'    : model,
@@ -824,7 +825,7 @@ with tab2:
                 'residuos' : residuos,
                 'modo'     : modo
             }
- 
+
         res      = st.session_state['modelo_resultado']
         modo_lab = res.get('modo_lab', False)
         df_mod   = res['df_modelo']
@@ -836,27 +837,27 @@ with tab2:
         residuos = res['residuos']
         model    = res['model']
         poly     = res['poly']
- 
+
         st.markdown("### Resultados del ajuste")
         k1, k2, k3, k4 = st.columns(4)
         k1.metric("R²", f"{r2:.4f}")
         k2.metric("Registros", len(df_mod))
         k3.metric("Grado", grado_r)
         k4.metric("Error std (residuos)", f"{residuos.std():.3f}")
- 
+
         st.markdown("---")
         st.markdown("### Ecuación del modelo")
- 
+
         coefs     = model.coef_
         intercept = model.intercept_
         nombres   = poly.get_feature_names_out(x_cols_r)
- 
+
         def limpiar_nombre(nombre, x_cols):
             res_n = nombre
             for i, col in enumerate(x_cols):
                 res_n = res_n.replace(f"x{i}", col)
             return res_n
- 
+
         eq_parts = []
         for nombre, coef in zip(nombres, coefs):
             nombre_limpio = limpiar_nombre(nombre, x_cols_r)
@@ -865,31 +866,31 @@ with tab2:
         signo_k = "+" if intercept >= 0 else "−"
         eq_str  = f"{y_col_r} = {signo_k} {abs(intercept):.4f} " + " ".join(eq_parts)
         st.code(eq_str, language=None)
- 
+
         coef_df = pd.DataFrame({
             'Término': ['Término independiente (k)'] + [limpiar_nombre(n, x_cols_r) for n in nombres],
             'Coeficiente': [round(intercept, 6)] + [round(c, 6) for c in coefs]
         })
         st.dataframe(coef_df, use_container_width=True, hide_index=True)
- 
+
         st.markdown("---")
         st.markdown("### Gráfico")
- 
+
         if len(x_cols_r) == 1:
             x_col_r = x_cols_r[0]
             fig     = go.Figure()
- 
+
             if usar_corte and len(df_new_global) > 0:
                 df_mod_train = df_train_global[[x_col_r, y_col_r]].dropna()
                 df_mod_new   = df_new_global[[x_col_r, y_col_r]].dropna()
- 
+
                 fig.add_trace(go.Scatter(
                     x=df_mod_train[x_col_r], y=df_mod_train[y_col_r], mode='markers',
                     name=f'Train (hasta {fecha_corte})',
                     marker=dict(color='#1a3a5c', size=8, opacity=0.85, line=dict(color='#2d6a9f', width=1)),
                     hovertemplate=f'{x_col_r}: %{{x:.2f}}<br>{y_col_r}: %{{y:.2f}}<extra>Train</extra>'
                 ))
- 
+
                 if len(df_mod_new) > 1:
                     fig.add_trace(go.Scatter(
                         x=df_mod_new[x_col_r].iloc[:-1], y=df_mod_new[y_col_r].iloc[:-1],
@@ -898,7 +899,7 @@ with tab2:
                                     line=dict(color='rgba(255,255,255,0.3)', width=0.5)),
                         hovertemplate=f'{x_col_r}: %{{x:.2f}}<br>{y_col_r}: %{{y:.2f}}<extra>Nuevo</extra>'
                     ))
- 
+
                 if len(df_mod_new) >= 1:
                     ultimo = df_mod_new.iloc[-1]
                     fig.add_trace(go.Scatter(
@@ -908,7 +909,7 @@ with tab2:
                                     line=dict(color='white', width=1.5)),
                         hovertemplate=f'{x_col_r}: %{{x:.2f}}<br>{y_col_r}: %{{y:.2f}}<extra>Último</extra>'
                     ))
- 
+
                 if len(df_mod_new) > 0:
                     x_new_pred   = poly.transform(df_mod_new[[x_col_r]].values)
                     y_new_pred   = model.predict(x_new_pred)
@@ -926,7 +927,7 @@ with tab2:
                     marker=dict(color='#1a3a5c', size=8, opacity=0.8, line=dict(color='#2d6a9f', width=1)),
                     hovertemplate=f'{x_col_r}: %{{x:.2f}}<br>{y_col_r}: %{{y:.2f}}<extra></extra>'
                 ))
- 
+
             x_all   = df_mod[x_col_r].values
             x_curve = np.linspace(x_all.min(), x_all.max(), 300).reshape(-1, 1)
             y_curve = model.predict(poly.transform(x_curve))
@@ -937,7 +938,7 @@ with tab2:
             ))
             fig.update_layout(**layout_claro(height=450))
             st.plotly_chart(fig, use_container_width=True, key="chart_tab2_single")
- 
+
         else:
             fig = go.Figure()
             fig.add_trace(go.Scatter(
@@ -952,7 +953,7 @@ with tab2:
             ))
             fig.update_layout(**layout_claro(height=450, titulo=f'Real vs Predicho  —  R² = {r2:.4f}'))
             st.plotly_chart(fig, use_container_width=True, key="chart_tab2_multi")
- 
+
         with st.expander("📉 Análisis de residuos"):
             fig_res = go.Figure()
             fig_res.add_trace(go.Scatter(
@@ -963,10 +964,10 @@ with tab2:
             fig_res.add_hline(y=0, line_dash='dash', line_color='#e63946')
             fig_res.update_layout(**layout_claro(height=300))
             st.plotly_chart(fig_res, use_container_width=True, key="chart_tab2_res")
- 
+
         st.markdown("---")
         st.markdown("### 🎛️ Simulador")
- 
+
         sim_cols = st.columns(len(x_cols_r))
         sim_vals = {}
         for i, xc in enumerate(x_cols_r):
@@ -979,23 +980,23 @@ with tab2:
                     value=round(v_med, 2), step=round((v_max - v_min) / 100, 2),
                     key=f"sim_{xc}"
                 )
- 
+
         X_sim      = np.array([[sim_vals[xc] for xc in x_cols_r]])
         X_sim_poly = poly.transform(X_sim)
         y_sim      = model.predict(X_sim_poly)[0]
         y_mean     = df_mod[y_col_r].mean()
         delta      = y_sim - y_mean
- 
+
         s1, s2, s3 = st.columns(3)
         s1.metric(f"{y_col_r} predicho", f"{y_sim:.3f}", delta=f"{delta:+.3f} vs promedio")
         s2.metric("Promedio histórico", f"{y_mean:.3f}")
         s3.metric("R² del modelo", f"{r2:.4f}")
- 
+
         st.markdown("---")
         st.markdown("### 📥 Exportar modelo")
- 
+
         col_exp1, col_exp2 = st.columns(2)
- 
+
         with col_exp1:
             if st.button("📊 Generar Excel de coeficientes", use_container_width=True, key="btn_excel_tab2"):
                 buffer = exportar_coeficientes_excel(st.session_state['modelo_resultado'], desde, hasta)
@@ -1005,7 +1006,7 @@ with tab2:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True, key="dl_excel_tab2"
                 )
- 
+
         with col_exp2:
             if st.button("📄 Generar reporte HTML", use_container_width=True, key="btn_html_tab2"):
                 html = generar_reporte_html(
@@ -1017,25 +1018,25 @@ with tab2:
                     file_name=f"reporte_met_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.html",
                     mime="text/html", use_container_width=True, key="dl_html_tab2"
                 )
- 
- 
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # TAB 3 — MODELO MANUAL
 # ═════════════════════════════════════════════════════════════════════════
 with tab3:
- 
+
     st.markdown("### Configuración")
- 
+
     usar_ec_lab_tab3 = st.toggle(
         "⚗ Usar ecuación de laboratorio (lgo/mchch)", value=False,
         key="switch_lab_tab3", help="Precarga los coeficientes con los valores de laboratorio"
     )
- 
+
     if usar_ec_lab_tab3:
         st.info("Coeficientes precargados con valores de laboratorio. Podés modificarlos libremente.")
- 
+
     col_m1, col_m2 = st.columns(2)
- 
+
     with col_m1:
         if usar_ec_lab_tab3:
             cols_lgo_t3 = [
@@ -1049,12 +1050,12 @@ with tab3:
             )
         else:
             x_col_man = st.selectbox("Variable X", cols_numericas, key="man_x")
- 
+
     with col_m2:
         y_col_man = st.selectbox(
             "Variable Y", [c for c in cols_numericas if c != x_col_man], key="man_y"
         )
- 
+
     if usar_ec_lab_tab3:
         grado_man = 3
         st.caption("Grado fijo en 3 para ecuación de laboratorio")
@@ -1062,15 +1063,15 @@ with tab3:
         grado_man = st.select_slider(
             "Grado del polinomio", options=[1, 2, 3, 4], value=2, key="man_grado"
         )
- 
+
     st.markdown("---")
     st.markdown("### Coeficientes")
- 
+
     if usar_ec_lab_tab3:
         coefs_pre = ECUACIONES_LAB.get(y_col_man, {"k": 0.0, "c1": 0.0, "c2": 0.0, "c3": 0.0})
         defaults  = [coefs_pre["k"], coefs_pre["c1"], coefs_pre["c2"], coefs_pre["c3"]]
         st.caption("⚗ Coeficientes precargados desde ecuación de laboratorio")
- 
+
         _clave_carga_t3 = f"_lab_cargado_t3_{y_col_man}"
         if _clave_carga_t3 not in st.session_state:
             for key in [f"coef_{i}_tab3" for i in range(4)]:
@@ -1094,12 +1095,12 @@ with tab3:
                     [float(res_auto['model'].intercept_)] +
                     [float(c) for c in res_auto['model'].coef_]
                 )
- 
+
     nombres_terminos = {
         0: 'k — Término independiente',
         1: 'c₁ · x', 2: 'c₂ · x²', 3: 'c₃ · x³', 4: 'c₄ · x⁴',
     }
- 
+
     coef_manuales = {}
     cols_coef     = st.columns(grado_man + 1)
     for i in range(grado_man + 1):
@@ -1109,10 +1110,10 @@ with tab3:
                 value=defaults[i] if i < len(defaults) else 0.0,
                 format="%.6f", key=f"coef_{i}_tab3"
             )
- 
+
     st.markdown("---")
     st.markdown("### Vista previa de la ecuación")
- 
+
     partes_eq = []
     for i in range(grado_man, -1, -1):
         c = coef_manuales[i]
@@ -1124,39 +1125,39 @@ with tab3:
             partes_eq.append(f"{c:+.6f}·{x_col_man}^{i}")
     eq_preview = f"{y_col_man} = " + " ".join(partes_eq)
     st.code(eq_preview, language=None)
- 
+
     def predict_manual(x, coefs, grado):
         return sum(coefs[i] * x**i for i in range(grado + 1))
- 
+
     st.markdown("---")
     st.markdown("### Gráfico")
- 
+
     df_man    = df_filtrado[[x_col_man, y_col_man]].dropna()
     color_txt = '#1a1a2e' if FONDO_CLARO else '#e6edf3'
- 
+
     if len(df_man) > 0:
         x_vals = df_man[x_col_man].values
         y_vals = df_man[y_col_man].values
- 
+
         x_curve    = np.linspace(x_vals.min(), x_vals.max(), 300)
         y_curve    = np.array([predict_manual(x, coef_manuales, grado_man) for x in x_curve])
         y_pred_man = np.array([predict_manual(x, coef_manuales, grado_man) for x in x_vals])
         r2_man     = r2_score(y_vals, y_pred_man)
- 
+
         fig_man = go.Figure()
         fig_man.add_trace(go.Scatter(
             x=x_vals, y=y_vals, mode='markers', name='Datos reales',
             marker=dict(color='#1a3a5c', size=8, opacity=0.8, line=dict(color='#2d6a9f', width=1)),
             hovertemplate=f'{x_col_man}: %{{x:.2f}}<br>{y_col_man}: %{{y:.2f}}<extra></extra>'
         ))
- 
+
         nombre_curva = "Ec. laboratorio" if usar_ec_lab_tab3 else "Modelo manual"
         fig_man.add_trace(go.Scatter(
             x=x_curve, y=y_curve, mode='lines',
             name=f'{nombre_curva} (R²={r2_man:.3f})',
             line=dict(color='#f5820a', width=2.5)
         ))
- 
+
         if 'modelo_resultado' in st.session_state:
             res_auto = st.session_state['modelo_resultado']
             if (not res_auto.get('modo_lab', False) and
@@ -1171,17 +1172,17 @@ with tab3:
                     name=f'Ajuste automático (R²={res_auto["r2"]:.3f})',
                     line=dict(color='#3fb950', width=1.5, dash='dash')
                 ))
- 
+
         fig_man.update_layout(**layout_claro(height=450))
         st.plotly_chart(fig_man, use_container_width=True, key="chart_tab3_manual")
- 
+
         st.markdown("---")
         st.markdown("### 🎛️ Simulador")
- 
+
         v_min = float(x_vals.min())
         v_max = float(x_vals.max())
         v_med = float(x_vals.mean())
- 
+
         sim_x_man = st.slider(
             x_col_man, min_value=round(v_min, 2), max_value=round(v_max, 2),
             value=round(v_med, 2), step=round((v_max - v_min) / 100, 2),
@@ -1191,27 +1192,27 @@ with tab3:
             "O ingresá un valor exacto", value=float(sim_x_man),
             format="%.2f", key="sim_manual_input"
         )
- 
+
         x_sim_final = sim_x_input
         y_sim_man   = predict_manual(x_sim_final, coef_manuales, grado_man)
         y_mean_man  = float(y_vals.mean())
         delta_man   = y_sim_man - y_mean_man
- 
+
         s1, s2, s3 = st.columns(3)
         s1.metric(f"{y_col_man} predicho", f"{y_sim_man:.3f}", delta=f"{delta_man:+.3f} vs promedio")
         s2.metric("Promedio histórico", f"{y_mean_man:.3f}")
         s3.metric("R² modelo manual", f"{r2_man:.4f}")
- 
+
         st.markdown("---")
         st.markdown("### 📥 Exportar modelo")
- 
+
         if st.button("📄 Generar reporte HTML", use_container_width=True, key="btn_html_tab3"):
             poly_man         = PolynomialFeatures(degree=grado_man, include_bias=False)
             poly_man.fit_transform(df_man[[x_col_man]].values)
             m_man            = LinearRegression()
             m_man.coef_      = np.array([coef_manuales[i] for i in range(1, grado_man + 1)])
             m_man.intercept_ = coef_manuales[0]
- 
+
             resultado_man = {
                 'modo_lab' : usar_ec_lab_tab3,
                 'model'    : m_man,
@@ -1234,6 +1235,6 @@ with tab3:
                 file_name=f"reporte_met_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.html",
                 mime="text/html", use_container_width=True, key="dl_html_tab3"
             )
- 
+
     else:
         st.warning("No hay datos suficientes para las variables seleccionadas.")
