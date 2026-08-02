@@ -309,6 +309,16 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
 
 def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Reporte Metalúrgico"):
     import plotly.io as pio
+    import json as _json
+
+    def fig_a_json_limpio(fig):
+        """Serializa figura sin el template de Plotly para evitar JSON sucio."""
+        fig.update_layout(template=None)
+        raw = pio.to_json(fig)
+        obj = _json.loads(raw)
+        # Eliminar template residual si quedó
+        obj.get('layout', {}).pop('template', None)
+        return _json.dumps(obj)
 
     tiene_modelo  = resultado_modelo is not None
     fecha_reporte = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
@@ -334,7 +344,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     )
     fig_serie.update_xaxes(gridcolor='#21262d')
     fig_serie.update_yaxes(gridcolor='#21262d')
-    graficos['serie'] = pio.to_json(fig_serie)
+    graficos['serie'] = fig_a_json_limpio(fig_serie)
 
     if corr_df is not None:
         fig_corr = go.Figure(go.Heatmap(
@@ -346,7 +356,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
             height=350, paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
             font=dict(color='#8b949e'), margin=dict(l=10, r=10, t=10, b=10)
         )
-        graficos['corr'] = pio.to_json(fig_corr)
+        graficos['corr'] = fig_a_json_limpio(fig_corr)
 
     eq_str = ""
     r2_str = ""
@@ -394,7 +404,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
                 font=dict(color='#1a1a2e', size=13),
                 xaxis=dict(gridcolor='#e0e0e0'), yaxis=dict(gridcolor='#e0e0e0'), height=450
             )
-            fig_mod_json = pio.to_json(fig_mod)
+            fig_mod_json = fig_a_json_limpio(fig_mod)
         else:
             y_vals   = df_mod[y_col_r].values
             y_pred_r = resultado_modelo['y_pred']
@@ -415,7 +425,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
                 font=dict(color='#1a1a2e', size=13),
                 xaxis=dict(gridcolor='#e0e0e0'), yaxis=dict(gridcolor='#e0e0e0'), height=450
             )
-            fig_mod_json = pio.to_json(fig_mod)
+            fig_mod_json = fig_a_json_limpio(fig_mod)
 
         coef_df = pd.DataFrame({
             'Término'    : ['Término independiente'] + list(nombres),
@@ -492,9 +502,9 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
 </div>
 <script>
   const config = {{responsive:true,displayModeBar:false}};
-  {'Plotly.newPlot("chart-modelo",' + fig_mod_json + '.data,' + fig_mod_json + '.layout,config);' if tiene_modelo and fig_mod_json else ''}
-  Plotly.newPlot("chart-serie",{graficos["serie"]}.data,{graficos["serie"]}.layout,config);
-  {'Plotly.newPlot("chart-corr",' + graficos["corr"] + '.data,' + graficos["corr"] + '.layout,config);' if "corr" in graficos else ''}
+  {('var fig_mod = ' + fig_mod_json + '; Plotly.newPlot("chart-modelo", fig_mod.data, fig_mod.layout, config);') if tiene_modelo and fig_mod_json else ''}
+  var fig_serie = {graficos["serie"]}; Plotly.newPlot("chart-serie", fig_serie.data, fig_serie.layout, config);
+  {('var fig_corr = ' + graficos["corr"] + '; Plotly.newPlot("chart-corr", fig_corr.data, fig_corr.layout, config);') if "corr" in graficos else ''}
 </script>
 </body>
 </html>"""
