@@ -308,18 +308,209 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
 
 
 def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Reporte Metalúrgico"):
-    import plotly.offline as pyo
+    import plotly.io as pio
 
-    def fig_a_div(fig, div_id):
-        """Genera un div HTML autocontenido para la figura."""
-        return pyo.plot(
-            fig,
-            output_type='div',
-            include_plotlyjs=False,
-            div_id=div_id,
-            config={'responsive': True, 'displayModeBar': False},
-            auto_open=False
+    def fig_a_json(fig):
+        """Serializa figura eliminando el template para evitar colores internos."""
+        fig.update_layout(template=None)
+        return pio.to_json(fig)
+
+    tiene_modelo  = resultado_modelo is not None
+    fecha_reporte = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
+    cols_num      = [c for c in cols_reporte if c in df_data.columns]
+    stats         = calcular_stats(df_data, cols_num)
+    corr_df       = calcular_correlaciones(df_data, cols_num) if len(cols_num) >= 2 else None
+    graficos      = {}
+
+    cols_plot = cols_num[:3]
+    fig_serie = make_subplots(rows=len(cols_plot), cols=1, shared_xaxes=True,
+                               subplot_titles=cols_plot, vertical_spacing=0.08)
+    colores = ['#2d6a9f', '#f5820a', '#3fb950']
+    for i, col in enumerate(cols_plot):
+        fig_serie.add_trace(go.Scatter(
+            x=df_data['fecha'], y=df_data[col],
+            mode='lines+markers', line=dict(color=colores[i], width=1.5),
+            marker=dict(size=3), name=col
+        ), row=i+1, col=1)
+    fig_serie.update_layout(
+        height=200 * len(cols_plot),
+        paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
+        font=dict(color='#8b949e'), showlegend=False
+    )
+    fig_serie.update_xaxes(gridcolor='#21262d')
+    fig_serie.update_yaxes(gridcolor='#21262d')
+    graficos['serie'] = fig_a_json(fig_serie)
+
+    if corr_df is not None:
+        fig_corr = go.Figure(go.Heatmap(
+            z=corr_df.values, x=corr_df.columns.tolist(), y=corr_df.index.tolist(),
+            text=corr_df.round(3).values, texttemplate='%{text}',
+            colorscale=[[0,'#1a3a5c'],[0.5,'#21262d'],[1,'#f5820a']], zmin=-1, zmax=1
+        ))
+        fig_corr.update_layout(
+            height=350, paper_bgcolor='#0d1117', plot_bgcolor='#0d1117',
+            font=dict(color='#8b949e'), margin=dict(l=10, r=10, t=10, b=10)
         )
+        graficos['corr'] = fig_a_json(fig_corr)
+
+    eq_str       = ""
+    r2_str       = ""
+    fig_mod_json = ""
+    coef_html    = ""
+    nombres      = []
+    x_cols_r     = []
+
+    if tiene_modelo:
+        model    = resultado_modelo['model']
+        poly     = resultado_modelo['poly']
+        df_mod   = resultado_modelo['df_modelo']
+        x_cols_r = resultado_modelo['x_cols']
+        y_col_r  = resultado_modelo['y_col']
+        grado_r  = resultado_modelo['grado']
+        r2       = resultado_modelo['r2']
+        r2_str   = f"{r2:.4f}"
+        coefs     = model.coef_
+        intercept = model.intercept_
+        nombres   = poly.get_feature_names_out(x_cols_r)
+
+        partes = [f"{intercept:.4f}"]
+        for nombre, coef in zip(nombres, coefs):
+            signo = "+" if coef >= 0 else "-"
+            partes.append(f"{signo} {abs(coef):.6f}·{nombre}")
+        eq_str = f"{y_col_r} = " + " ".join(partes)
+
+        if len(x_cols_r) == 1:
+            x_vals  = df_mod[x_cols_r[0]].values
+            y_vals  = df_mod[y_col_r].values
+            x_curve = np.linspace(x_vals.min(), x_vals.max(), 300).reshape(-1, 1)
+            y_curve = model.predict(poly.transform(x_curve))
+            fig_mod = go.Figure()
+            fig_mod.add_trace(go.Scatter(
+                x=x_vals, y=y_vals, mode='markers', name='Datos',
+                marker=dict(color='#1a3a5c', size=8, opacity=0.8,
+                            line=dict(color='#2d6a9f', width=1)),
+            ))
+            fig_mod.add_trace(go.Scatter(
+                x=x_curve.flatten(), y=y_curve, mode='lines',
+                name=f'Ajuste grado {grado_r}', line=dict(color='#e63946', width=2.5)
+            ))
+            fig_mod.update_layout(
+                xaxis_title=x_cols_r[0], yaxis_title=y_col_r,
+                paper_bgcolor='#ffffff', plot_bgcolor='#f8f9fa',
+                font=dict(color='#1a1a2e', size=13),
+                xaxis=dict(gridcolor='#e0e0e0'), yaxis=dict(gridcolor='#e0e0e0'),
+                height=450
+            )
+        else:
+            y_vals   = df_mod[y_col_r].values
+            y_pred_r = resultado_modelo['y_pred']
+            lim      = [float(y_vals.min()), float(y_vals.max())]
+            fig_mod  = go.Figure()
+            fig_mod.add_trace(go.Scatter(
+                x=y_vals, y=y_pred_r, mode='markers', name='Datos',
+                marker=dict(color='#2d6a9f', size=7, opacity=0.8),
+            ))
+            fig_mod.add_trace(go.Scatter(
+                x=lim, y=lim, mode='lines', name='Ideal',
+                line=dict(color='#e63946', width=1.5, dash='dash')
+            ))
+            fig_mod.update_layout(
+                xaxis_title=f'{y_col_r} real', yaxis_title=f'{y_col_r} predicho',
+                title=f'Real vs Predicho — R² = {r2:.4f} — Variables: {", ".join(x_cols_r)}',
+                paper_bgcolor='#ffffff', plot_bgcolor='#f8f9fa',
+                font=dict(color='#1a1a2e', size=13),
+                xaxis=dict(gridcolor='#e0e0e0'), yaxis=dict(gridcolor='#e0e0e0'),
+                height=450
+            )
+        fig_mod_json = fig_a_json(fig_mod)
+
+        coef_df = pd.DataFrame({
+            'Término'    : ['Término independiente'] + list(nombres),
+            'Coeficiente': [round(intercept, 6)] + [round(c, 6) for c in coefs]
+        })
+        coef_html = coef_df.to_html(index=False, border=0, classes='stats-table')
+
+    stats_html = stats.to_html(index=False, border=0, classes='stats-table')
+
+    # ── Script JS — cada figura se asigna a variable para evitar duplicar JSON ──
+    script_lines = ["  const config = {responsive:true, displayModeBar:false};"]
+    if tiene_modelo and fig_mod_json:
+        script_lines.append(f"  var gmod = {fig_mod_json}; Plotly.newPlot('chart-modelo', gmod.data, gmod.layout, config);")
+    script_lines.append(f"  var gser = {graficos['serie']}; Plotly.newPlot('chart-serie', gser.data, gser.layout, config);")
+    if "corr" in graficos:
+        script_lines.append(f"  var gcor = {graficos['corr']}; Plotly.newPlot('chart-corr', gcor.data, gcor.layout, config);")
+    script_js = "\n".join(script_lines)
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>{titulo}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@300;400;500&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {{--bg:#0d1117;--surface:#161b22;--surface2:#1c2330;--border:#30363d;--accent:#f5820a;--text:#e6edf3;--text-muted:#8b949e;--green:#3fb950;--red:#e63946;}}
+  *{{box-sizing:border-box;margin:0;padding:0;}}
+  body{{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;font-weight:300;padding:0;}}
+  header{{background:var(--surface);border-bottom:1px solid var(--border);padding:20px 40px;display:flex;align-items:center;gap:16px;}}
+  .h-icon{{width:38px;height:38px;background:var(--accent);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px;}}
+  .h-title{{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;}}
+  .h-sub{{font-size:11px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-top:2px;}}
+  .h-date{{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 10px;}}
+  .content{{padding:36px 40px;max-width:1400px;margin:0 auto;}}
+  .section-title{{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin:36px 0 20px;display:flex;align-items:center;gap:12px;}}
+  .section-title::before,.section-title::after{{content:'';flex:1;height:1px;background:var(--border);}}
+  .section-title::before{{flex:0 0 24px;}}
+  .kpi-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}}
+  .kpi-card{{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px;}}
+  .kpi-label{{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;}}
+  .kpi-value{{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;color:var(--text);}}
+  .kpi-card.green .kpi-value{{color:var(--green);}}
+  .eq-box{{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:18px;margin-bottom:24px;}}
+  .eq-code{{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text);word-break:break-all;line-height:1.8;}}
+  .chart-card{{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:20px;}}
+  .chart-title{{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-muted);padding:14px 18px 10px;border-bottom:1px solid var(--border);}}
+  .stats-table{{width:100%;border-collapse:collapse;font-size:12px;}}
+  .stats-table th{{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);padding:10px 18px;text-align:left;background:var(--surface2);border-bottom:1px solid var(--border);}}
+  .stats-table td{{font-family:'JetBrains Mono',monospace;color:var(--text);padding:10px 18px;border-bottom:1px solid rgba(48,54,61,0.5);}}
+  .stats-table tr:last-child td{{border-bottom:none;}}
+  .stats-table tr:hover td{{background:var(--surface2);}}
+  @media print{{header{{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}.chart-card{{page-break-inside:avoid;}}}}
+</style>
+</head>
+<body>
+<header>
+  <div class="h-icon">⚗</div>
+  <div>
+    <div class="h-title">{titulo}</div>
+    <div class="h-sub">Análisis metalúrgico · {len(df_data)} registros</div>
+  </div>
+  <div class="h-date">Generado: {fecha_reporte}</div>
+</header>
+<div class="content">
+  <div class="section-title">Resumen</div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Registros</div><div class="kpi-value">{len(df_data)}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Desde</div><div class="kpi-value" style="font-size:15px">{df_data['fecha'].min().strftime('%Y-%m-%d')}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Hasta</div><div class="kpi-value" style="font-size:15px">{df_data['fecha'].max().strftime('%Y-%m-%d')}</div></div>
+    <div class="kpi-card {'green' if tiene_modelo else ''}"><div class="kpi-label">R² modelo</div><div class="kpi-value">{r2_str if tiene_modelo else '—'}</div></div>
+  </div>
+  {'<div class="section-title">Modelo ajustado</div>' if tiene_modelo else ''}
+  {f"""<div class="eq-box"><div class="kpi-label" style="margin-bottom:8px">Ecuación</div><div class="eq-code">{eq_str}</div></div>
+  <div class="chart-card"><div class="chart-title">Ajuste — {x_cols_r[0] if len(x_cols_r)==1 else "Real vs Predicho"}</div><div id="chart-modelo"></div></div>
+  <div class="chart-card" style="margin-bottom:20px"><div class="chart-title">Coeficientes</div><div style="padding:8px 0">{coef_html}</div></div>""" if tiene_modelo and fig_mod_json else ''}
+  <div class="section-title">Serie temporal</div>
+  <div class="chart-card"><div class="chart-title">Variables vs Fecha</div><div id="chart-serie"></div></div>
+  {'<div class="section-title">Correlaciones</div><div class="chart-card"><div class="chart-title">Matriz de correlación</div><div id="chart-corr"></div></div>' if corr_df is not None else ''}
+  <div class="section-title">Estadísticas descriptivas</div>
+  <div class="chart-card"><div class="chart-title">Resumen estadístico</div><div style="padding:8px 0">{stats_html}</div></div>
+</div>
+<script>
+{script_js}
+</script>
+</body>
+</html>"""
+    return html
 
     tiene_modelo  = resultado_modelo is not None
     fecha_reporte = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
