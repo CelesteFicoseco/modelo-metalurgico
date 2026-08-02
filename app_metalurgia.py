@@ -322,13 +322,16 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     corr_df       = calcular_correlaciones(df_data, cols_num) if len(cols_num) >= 2 else None
     graficos      = {}
 
-    cols_plot = cols_num[:3]
-    fig_serie = make_subplots(rows=len(cols_plot), cols=1, shared_xaxes=True,
-                               subplot_titles=cols_plot, vertical_spacing=0.08)
-    colores = ['#2d6a9f', '#f5820a', '#3fb950']
+    cols_plot   = cols_num[:3]
+    fig_serie   = make_subplots(rows=len(cols_plot), cols=1, shared_xaxes=True,
+                                subplot_titles=cols_plot, vertical_spacing=0.08)
+    colores     = ['#2d6a9f', '#f5820a', '#3fb950']
+    # Convertir fechas a string para evitar formato binario
+    fechas_str  = df_data['fecha'].dt.strftime('%Y-%m-%d').tolist()
     for i, col in enumerate(cols_plot):
         fig_serie.add_trace(go.Scatter(
-            x=df_data['fecha'], y=df_data[col],
+            x=fechas_str,
+            y=[float(v) for v in df_data[col].fillna(0).tolist()],
             mode='lines+markers', line=dict(color=colores[i], width=1.5),
             marker=dict(size=3), name=col
         ), row=i+1, col=1)
@@ -343,8 +346,11 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
 
     if corr_df is not None:
         fig_corr = go.Figure(go.Heatmap(
-            z=corr_df.values, x=corr_df.columns.tolist(), y=corr_df.index.tolist(),
-            text=corr_df.round(3).values, texttemplate='%{text}',
+            z=corr_df.values.tolist(),
+            x=corr_df.columns.tolist(),
+            y=corr_df.index.tolist(),
+            text=corr_df.round(3).values.tolist(),
+            texttemplate='%{text}',
             colorscale=[[0,'#1a3a5c'],[0.5,'#21262d'],[1,'#f5820a']], zmin=-1, zmax=1
         ))
         fig_corr.update_layout(
@@ -380,18 +386,19 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
         eq_str = f"{y_col_r} = " + " ".join(partes)
 
         if len(x_cols_r) == 1:
-            x_vals  = df_mod[x_cols_r[0]].values
-            y_vals  = df_mod[y_col_r].values
-            x_curve = np.linspace(x_vals.min(), x_vals.max(), 300).reshape(-1, 1)
-            y_curve = model.predict(poly.transform(x_curve))
+            x_vals_l  = df_mod[x_cols_r[0]].values.tolist()
+            y_vals_l  = df_mod[y_col_r].values.tolist()
+            x_curve   = np.linspace(min(x_vals_l), max(x_vals_l), 300).reshape(-1, 1)
+            y_curve_l = model.predict(poly.transform(x_curve)).tolist()
+            x_curve_l = x_curve.flatten().tolist()
             fig_mod = go.Figure()
             fig_mod.add_trace(go.Scatter(
-                x=x_vals, y=y_vals, mode='markers', name='Datos',
+                x=x_vals_l, y=y_vals_l, mode='markers', name='Datos',
                 marker=dict(color='#1a3a5c', size=8, opacity=0.8,
                             line=dict(color='#2d6a9f', width=1)),
             ))
             fig_mod.add_trace(go.Scatter(
-                x=x_curve.flatten(), y=y_curve, mode='lines',
+                x=x_curve_l, y=y_curve_l, mode='lines',
                 name=f'Ajuste grado {grado_r}', line=dict(color='#e63946', width=2.5)
             ))
             fig_mod.update_layout(
@@ -402,12 +409,12 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
                 height=450
             )
         else:
-            y_vals   = df_mod[y_col_r].values
-            y_pred_r = resultado_modelo['y_pred']
-            lim      = [float(y_vals.min()), float(y_vals.max())]
-            fig_mod  = go.Figure()
+            y_vals_l   = df_mod[y_col_r].values.tolist()
+            y_pred_l   = resultado_modelo['y_pred'].tolist()
+            lim        = [float(min(y_vals_l)), float(max(y_vals_l))]
+            fig_mod    = go.Figure()
             fig_mod.add_trace(go.Scatter(
-                x=y_vals, y=y_pred_r, mode='markers', name='Datos',
+                x=y_vals_l, y=y_pred_l, mode='markers', name='Datos',
                 marker=dict(color='#2d6a9f', size=7, opacity=0.8),
             ))
             fig_mod.add_trace(go.Scatter(
