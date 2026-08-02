@@ -308,13 +308,18 @@ def exportar_coeficientes_excel(resultado, fecha_desde, fecha_hasta):
 
 
 def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Reporte Metalúrgico"):
-    import plotly.io as pio
+    import json as _json
+    import plotly
 
     def fig_a_json_limpio(fig):
-        """Serializa figura sin el template de Plotly, con arrays JSON estándar."""
-        fig.layout.template = None
-        # engine="json" fuerza arrays normales en lugar del formato binario bdata
-        return pio.to_json(fig, engine="json")
+        """
+        Convierte figura a dict, elimina el template y serializa
+        con el encoder oficial de Plotly que maneja numpy arrays.
+        """
+        fig_dict = fig.to_dict()
+        # Eliminar template que contamina el JSON con colores internos
+        fig_dict.get('layout', {}).pop('template', None)
+        return _json.dumps(fig_dict, cls=plotly.utils.PlotlyJSONEncoder)
 
     tiene_modelo  = resultado_modelo is not None
     fecha_reporte = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')
