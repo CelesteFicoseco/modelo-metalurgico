@@ -852,6 +852,7 @@ with st.sidebar:
         if st.button("✕ Quitar fusionado", key="btn_quitar_fusionado"):
             del st.session_state['archivo_fusionado']
             st.rerun()
+        archivo_cargado = True
     else:
         archivo = st.file_uploader(
             "Subir Excel o CSV", type=['xlsx', 'xls', 'csv'],
@@ -863,51 +864,109 @@ with st.sidebar:
                 st.error(f"Error al cargar: {error}")
                 st.stop()
             st.success(f"✓ {len(df_raw)} registros cargados")
+            archivo_cargado = True
         else:
+            archivo_cargado = False
             st.info("Subí un archivo para comenzar")
-            st.stop()
 
-    st.markdown("### Rango de fechas")
-    fecha_min = df_raw['fecha'].min().date()
-    fecha_max = df_raw['fecha'].max().date()
+    if archivo_cargado:
+        st.markdown("### Rango de fechas")
+        fecha_min = df_raw['fecha'].min().date()
+        fecha_max = df_raw['fecha'].max().date()
 
-    col1, col2 = st.columns(2)
-    with col1:
-        desde = st.date_input("Desde", fecha_min, min_value=fecha_min, max_value=fecha_max)
-    with col2:
-        hasta = st.date_input("Hasta", fecha_max, min_value=fecha_min, max_value=fecha_max)
+        col1, col2 = st.columns(2)
+        with col1:
+            desde = st.date_input("Desde", fecha_min, min_value=fecha_min, max_value=fecha_max)
+        with col2:
+            hasta = st.date_input("Hasta", fecha_max, min_value=fecha_min, max_value=fecha_max)
 
-    mask = (df_raw['fecha'].dt.date >= desde) & (df_raw['fecha'].dt.date <= hasta)
-    df   = df_raw[mask].reset_index(drop=True)
-    st.caption(f"{len(df)} registros en el rango seleccionado")
+        mask = (df_raw['fecha'].dt.date >= desde) & (df_raw['fecha'].dt.date <= hasta)
+        df   = df_raw[mask].reset_index(drop=True)
+        st.caption(f"{len(df)} registros en el rango seleccionado")
 
-    st.markdown("### ✂️ Corte train / nuevo")
-    usar_corte = st.toggle(
-        "Activar corte de período", value=False,
-        help="Divide los datos en históricos (train) y nuevos para comparar contra el modelo"
-    )
-
-    fecha_corte = None
-    if usar_corte:
-        fecha_corte = st.date_input(
-            "Fecha de corte",
-            value=df_raw['fecha'].max().date() - pd.Timedelta(days=30),
-            min_value=fecha_min, max_value=fecha_max,
-            help="Datos hasta esta fecha = train (azul). Datos posteriores = nuevos (naranja)"
+        st.markdown("### ✂️ Corte train / nuevo")
+        usar_corte = st.toggle(
+            "Activar corte de período", value=False,
+            help="Divide los datos en históricos (train) y nuevos para comparar contra el modelo"
         )
-        df_train_global = df[df['fecha'].dt.date <= fecha_corte].reset_index(drop=True)
-        df_new_global   = df[df['fecha'].dt.date >  fecha_corte].reset_index(drop=True)
-        st.caption(f"Train: {len(df_train_global)} registros  |  Nuevos: {len(df_new_global)} registros")
-    else:
-        df_train_global = df.copy()
-        df_new_global   = pd.DataFrame(columns=df.columns)
 
-    st.markdown("### Variables a explorar")
-    cols_numericas = get_columnas_numericas(df)
-    cols_seleccionadas = st.multiselect(
-        "Seleccionar variables", cols_numericas,
-        default=cols_numericas[:4] if len(cols_numericas) >= 4 else cols_numericas
-    )
+        fecha_corte = None
+        if usar_corte:
+            fecha_corte = st.date_input(
+                "Fecha de corte",
+                value=df_raw['fecha'].max().date() - pd.Timedelta(days=30),
+                min_value=fecha_min, max_value=fecha_max,
+                help="Datos hasta esta fecha = train (azul). Datos posteriores = nuevos (naranja)"
+            )
+            df_train_global = df[df['fecha'].dt.date <= fecha_corte].reset_index(drop=True)
+            df_new_global   = df[df['fecha'].dt.date >  fecha_corte].reset_index(drop=True)
+            st.caption(f"Train: {len(df_train_global)} registros  |  Nuevos: {len(df_new_global)} registros")
+        else:
+            df_train_global = df.copy()
+            df_new_global   = pd.DataFrame(columns=df.columns)
+
+        st.markdown("### Variables a explorar")
+        cols_numericas = get_columnas_numericas(df)
+        cols_seleccionadas = st.multiselect(
+            "Seleccionar variables", cols_numericas,
+            default=cols_numericas[:4] if len(cols_numericas) >= 4 else cols_numericas
+        )
+
+# ── PANTALLA DE BIENVENIDA ────────────────────────────────────────────────
+if not archivo_cargado:
+    st.markdown("""
+    <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 60vh;
+        text-align: center;
+        padding: 40px;
+    ">
+        <div style="font-size: 64px; margin-bottom: 24px;">⚗</div>
+        <h1 style="
+            font-family: 'Calibri', sans-serif;
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a3a5c;
+            margin-bottom: 12px;
+        ">Herramienta de Modelado Metalúrgico</h1>
+        <p style="
+            font-size: 18px;
+            color: #8b949e;
+            margin-bottom: 40px;
+            max-width: 520px;
+        ">Cargá un archivo Excel o CSV desde el panel izquierdo para comenzar el análisis.</p>
+        <div style="
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            max-width: 700px;
+            width: 100%;
+        ">
+            <div style="background:#f0f4f8; border-radius:10px; padding:24px 16px;">
+                <div style="font-size:28px; margin-bottom:8px;">📊</div>
+                <div style="font-weight:600; color:#1a3a5c; font-size:15px; margin-bottom:6px;">Exploración</div>
+                <div style="color:#8b949e; font-size:13px;">Visualizá tendencias, correlaciones y estadísticas</div>
+            </div>
+            <div style="background:#f0f4f8; border-radius:10px; padding:24px 16px;">
+                <div style="font-size:28px; margin-bottom:8px;">📈</div>
+                <div style="font-weight:600; color:#1a3a5c; font-size:15px; margin-bottom:6px;">Ajuste automático</div>
+                <div style="color:#8b949e; font-size:13px;">Calculá la ecuación que mejor representa tus datos</div>
+            </div>
+            <div style="background:#f0f4f8; border-radius:10px; padding:24px 16px;">
+                <div style="font-size:28px; margin-bottom:8px;">✏️</div>
+                <div style="font-weight:600; color:#1a3a5c; font-size:15px; margin-bottom:6px;">Modelo manual</div>
+                <div style="color:#8b949e; font-size:13px;">Ingresá coeficientes conocidos y simulá resultados</div>
+            </div>
+        </div>
+        <p style="margin-top:40px; color:#cccccc; font-size:13px;">
+            SSR Puna — Área Metalurgia · Versión 1.0
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.stop()
 
 # ── TABS PRINCIPALES ──────────────────────────────────────────────────────
 if not cols_seleccionadas:
