@@ -502,10 +502,7 @@ def generar_reporte_html(df_data, resultado_modelo, cols_reporte, titulo="Report
     <div class="kpi-card"><div class="kpi-label">Hasta</div><div class="kpi-value" style="font-size:15px">{df_data['fecha'].max().strftime('%Y-%m-%d')}</div></div>
     <div class="kpi-card {'green' if tiene_modelo else ''}"><div class="kpi-label">R² modelo</div><div class="kpi-value">{r2_str if tiene_modelo else '—'}</div></div>
   </div>
-  {'<div class="section-title">Modelo ajustado</div>' if tiene_modelo else ''}
-  {f"""<div class="eq-box"><div class="kpi-label" style="margin-bottom:8px">Ecuación</div><div class="eq-code">{eq_str}</div></div>
-  <div class="chart-card"><div class="chart-title">Ajuste — {x_cols_r[0] if len(x_cols_r)==1 else "Real vs Predicho"}</div><div id="chart-modelo"></div></div>
-  <div class="chart-card" style="margin-bottom:20px"><div class="chart-title">Coeficientes</div><div style="padding:8px 0">{coef_html}</div></div>""" if tiene_modelo and fig_mod_json else ''}
+  {html_section_modelo}
   <div class="section-title">Serie temporal</div>
   <div class="chart-card"><div class="chart-title">Variables vs Fecha</div><div id="chart-serie"></div></div>
   {'<div class="section-title">Correlaciones</div><div class="chart-card"><div class="chart-title">Matriz de correlación</div><div id="chart-corr"></div></div>' if corr_df is not None else ''}
