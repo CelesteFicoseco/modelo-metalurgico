@@ -743,64 +743,174 @@ with st.sidebar:
     st.markdown("## Modelo Metalúrgico")
     st.markdown("---")
 
-    st.markdown("### Carga de Datos")
-    archivo = st.file_uploader(
-        "Subir Excel o CSV", type=['xlsx', 'xls', 'csv'],
-        help="Una fila por día, con columna de fecha"
-    )
+    # ── FUSIÓN DE ARCHIVOS (opcional) ─────────────────────────────────────
+    with st.expander("🔗 Fusionar archivos Excel", expanded=False):
+        st.caption("Opcional — uní hasta dos archivos por columna de fecha.")
 
-    if archivo:
-        df_raw, error = cargar_datos(archivo)
-        if error:
-            st.error(f"Error al cargar: {error}")
+        def leer_crudo(f):
+            if f.name.endswith('.csv'):
+                return pd.read_csv(f)
+            return pd.read_excel(f)
+
+        def detectar_col_fecha(df):
+            for col in df.columns:
+                if 'date' in col.lower() or 'fecha' in col.lower():
+                    df[col] = pd.to_datetime(df[col])
+                    return df.rename(columns={col: 'fecha'})
+            raise ValueError(f"No se encontró columna de fecha en el archivo")
+
+        arch1 = st.file_uploader(
+            "Archivo 1 (base)",
+            type=['xlsx', 'xls', 'csv'],
+            key="fusion_arch1"
+        )
+        arch2 = st.file_uploader(
+            "Archivo 2 (columnas adicionales)",
+            type=['xlsx', 'xls', 'csv'],
+            key="fusion_arch2"
+        )
+
+        if arch1:
+            try:
+                df1 = detectar_col_fecha(leer_crudo(arch1))
+
+                if arch2:
+                    df2 = detectar_col_fecha(leer_crudo(arch2))
+
+                    # Detectar columnas duplicadas
+                    cols1 = set(df1.columns) - {'fecha'}
+                    cols2 = set(df2.columns) - {'fecha'}
+                    duplicadas = cols1 & cols2
+                    if duplicadas:
+                        st.warning(
+                            f"Columnas duplicadas — se agregarán sufijos _1 y _2: "
+                            f"{', '.join(sorted(duplicadas))}"
+                        )
+
+                    # Outer join por fecha
+                    df_fusionado = pd.merge(
+                        df1, df2, on='fecha', how='outer',
+                        suffixes=('_1', '_2')
+                    ).sort_values('fecha').reset_index(drop=True)
+
+                    # Resumen
+                    ca, cb = st.columns(2)
+                    ca.metric("Archivo 1", f"{len(df1)} filas")
+                    cb.metric("Archivo 2", f"{len(df2)} filas")
+                    st.metric("Resultado", f"{len(df_fusionado)} filas  ·  {len(df_fusionado.columns)-1} columnas")
+
+                    # Fechas sin match
+                    fechas_solo1 = set(df1['fecha']) - set(df2['fecha'])
+                    fechas_solo2 = set(df2['fecha']) - set(df1['fecha'])
+                    if fechas_solo1:
+                        st.caption(f"⚠ {len(fechas_solo1)} fecha(s) solo en archivo 1 → columnas del 2 vacías")
+                    if fechas_solo2:
+                        st.caption(f"⚠ {len(fechas_solo2)} fecha(s) solo en archivo 2 → columnas del 1 vacías")
+
+                    # Vista previa
+                    with st.expander("Vista previa (5 filas)"):
+                        st.dataframe(df_fusionado.head(5), use_container_width=True)
+
+                    # Descarga
+                    import io as _io
+                    buf = _io.BytesIO()
+                    df_fusionado.assign(
+                        fecha=df_fusionado['fecha'].dt.strftime('%Y-%m-%d')
+                    ).to_excel(buf, index=False)
+                    buf.seek(0)
+                    st.download_button(
+                        "⬇ Descargar fusionado (.xlsx)",
+                        data=buf,
+                        file_name=f"fusionado_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        key="dl_fusionado"
+                    )
+
+                    # Cargar en la app
+                    if st.button(
+                        "✅ Usar este archivo en la app",
+                        use_container_width=True,
+                        type="primary",
+                        key="btn_usar_fusionado"
+                    ):
+                        st.session_state['archivo_fusionado'] = df_fusionado
+                        st.success("Listo — continuá desde Carga de Datos.")
+
+                else:
+                    st.info("Subí un segundo archivo para fusionar, o cargá el archivo 1 directamente abajo.")
+
+            except Exception as e:
+                st.error(f"Error al fusionar: {e}")
+
+    st.markdown("---")
+
+    # ── CARGA DE DATOS ────────────────────────────────────────────────────
+    st.markdown("### Carga de Datos")
+
+    # Si hay archivo fusionado en session_state, lo usa directamente
+    if 'archivo_fusionado' in st.session_state:
+        df_raw = st.session_state['archivo_fusionado'].copy()
+        st.success(f"✓ Usando archivo fusionado — {len(df_raw)} registros")
+        if st.button("✕ Quitar fusionado", key="btn_quitar_fusionado"):
+            del st.session_state['archivo_fusionado']
+            st.rerun()
+    else:
+        archivo = st.file_uploader(
+            "Subir Excel o CSV", type=['xlsx', 'xls', 'csv'],
+            help="Una fila por día, con columna de fecha"
+        )
+        if archivo:
+            df_raw, error = cargar_datos(archivo)
+            if error:
+                st.error(f"Error al cargar: {error}")
+                st.stop()
+            st.success(f"✓ {len(df_raw)} registros cargados")
+        else:
+            st.info("Subí un archivo para comenzar")
             st.stop()
 
-        st.success(f"✓ {len(df_raw)} registros cargados")
+    st.markdown("### Rango de fechas")
+    fecha_min = df_raw['fecha'].min().date()
+    fecha_max = df_raw['fecha'].max().date()
 
-        st.markdown("### Rango de fechas")
-        fecha_min = df_raw['fecha'].min().date()
-        fecha_max = df_raw['fecha'].max().date()
+    col1, col2 = st.columns(2)
+    with col1:
+        desde = st.date_input("Desde", fecha_min, min_value=fecha_min, max_value=fecha_max)
+    with col2:
+        hasta = st.date_input("Hasta", fecha_max, min_value=fecha_min, max_value=fecha_max)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            desde = st.date_input("Desde", fecha_min, min_value=fecha_min, max_value=fecha_max)
-        with col2:
-            hasta = st.date_input("Hasta", fecha_max, min_value=fecha_min, max_value=fecha_max)
+    mask = (df_raw['fecha'].dt.date >= desde) & (df_raw['fecha'].dt.date <= hasta)
+    df   = df_raw[mask].reset_index(drop=True)
+    st.caption(f"{len(df)} registros en el rango seleccionado")
 
-        mask = (df_raw['fecha'].dt.date >= desde) & (df_raw['fecha'].dt.date <= hasta)
-        df   = df_raw[mask].reset_index(drop=True)
-        st.caption(f"{len(df)} registros en el rango seleccionado")
+    st.markdown("### ✂️ Corte train / nuevo")
+    usar_corte = st.toggle(
+        "Activar corte de período", value=False,
+        help="Divide los datos en históricos (train) y nuevos para comparar contra el modelo"
+    )
 
-        st.markdown("### ✂️ Corte train / nuevo")
-        usar_corte = st.toggle(
-            "Activar corte de período", value=False,
-            help="Divide los datos en históricos (train) y nuevos para comparar contra el modelo"
+    fecha_corte = None
+    if usar_corte:
+        fecha_corte = st.date_input(
+            "Fecha de corte",
+            value=df_raw['fecha'].max().date() - pd.Timedelta(days=30),
+            min_value=fecha_min, max_value=fecha_max,
+            help="Datos hasta esta fecha = train (azul). Datos posteriores = nuevos (naranja)"
         )
-
-        fecha_corte = None
-        if usar_corte:
-            fecha_corte = st.date_input(
-                "Fecha de corte",
-                value=df_raw['fecha'].max().date() - pd.Timedelta(days=30),
-                min_value=fecha_min, max_value=fecha_max,
-                help="Datos hasta esta fecha = train (azul). Datos posteriores = nuevos (naranja)"
-            )
-            df_train_global = df[df['fecha'].dt.date <= fecha_corte].reset_index(drop=True)
-            df_new_global   = df[df['fecha'].dt.date >  fecha_corte].reset_index(drop=True)
-            st.caption(f"Train: {len(df_train_global)} registros  |  Nuevos: {len(df_new_global)} registros")
-        else:
-            df_train_global = df.copy()
-            df_new_global   = pd.DataFrame(columns=df.columns)
-
-        st.markdown("### Variables a explorar")
-        cols_numericas = get_columnas_numericas(df)
-        cols_seleccionadas = st.multiselect(
-            "Seleccionar variables", cols_numericas,
-            default=cols_numericas[:4] if len(cols_numericas) >= 4 else cols_numericas
-        )
+        df_train_global = df[df['fecha'].dt.date <= fecha_corte].reset_index(drop=True)
+        df_new_global   = df[df['fecha'].dt.date >  fecha_corte].reset_index(drop=True)
+        st.caption(f"Train: {len(df_train_global)} registros  |  Nuevos: {len(df_new_global)} registros")
     else:
-        st.info("Subí un archivo para comenzar")
-        st.stop()
+        df_train_global = df.copy()
+        df_new_global   = pd.DataFrame(columns=df.columns)
+
+    st.markdown("### Variables a explorar")
+    cols_numericas = get_columnas_numericas(df)
+    cols_seleccionadas = st.multiselect(
+        "Seleccionar variables", cols_numericas,
+        default=cols_numericas[:4] if len(cols_numericas) >= 4 else cols_numericas
+    )
 
 # ── TABS PRINCIPALES ──────────────────────────────────────────────────────
 if not cols_seleccionadas:
