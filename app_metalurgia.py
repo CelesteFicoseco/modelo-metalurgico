@@ -924,7 +924,7 @@ if not archivo_cargado:
         text-align: center;
         padding: 40px;
     ">
-        <div style="font-size: 64px; margin-bottom: 24px;">⚗</div>
+        <div style="font-size: 64px; margin-bottom: 24px;"></div>
         <h1 style="
             font-family: 'Calibri', sans-serif;
             font-size: 32px;
